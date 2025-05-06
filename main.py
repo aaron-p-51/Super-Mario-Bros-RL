@@ -2,6 +2,7 @@ import torch
 
 import gym_super_mario_bros
 from gym_super_mario_bros.actions import RIGHT_ONLY
+from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
 
 from agent import Agent
 
@@ -23,7 +24,7 @@ else:
 ENV_NAME = 'SuperMarioBros-1-1-v0'
 SHOULD_TRAIN = True
 DISPLAY = True
-CKPT_SAVE_INTERVAL = 5000
+CKPT_SAVE_INTERVAL = 1000
 NUM_OF_EPISODES = 50_000
 
 env = gym_super_mario_bros.make(ENV_NAME, render_mode='human' if DISPLAY else 'rgb', apply_api_compatibility=True)
@@ -53,6 +54,9 @@ for i in range(NUM_OF_EPISODES):
         a = agent.choose_action(state)
         new_state, reward, done, truncated, info  = env.step(a)
         total_reward += reward
+
+        #if DISPLAY:
+        #    time.sleep(1)
 
         if SHOULD_TRAIN:
             agent.store_in_memory(state, a, reward, new_state, done)

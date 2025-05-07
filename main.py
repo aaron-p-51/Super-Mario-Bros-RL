@@ -1,4 +1,5 @@
 import torch
+import msvcrt
 
 import gym_super_mario_bros
 from gym_super_mario_bros.actions import RIGHT_ONLY
@@ -13,22 +14,34 @@ import os
 
 from utils import *
 
+# Create model path for checkpoints
 model_path = os.path.join("models", get_current_date_time_string())
 os.makedirs(model_path, exist_ok=True)
+
+save_path = os.path.join("models", "savepoints")
+os.makedirs(save_path, exist_ok=True)
+
+
+############################ Configuration #########################
+SAVEPOINT_FILE = ""
+
+ENV_NAME = "SuperMarioBros-1-1-v0"
+SHOULD_TRAIN = True
+DISPLAY = True
+CKPT_SAVE_INTERVAL = 1000
+NUM_OF_EPISODES = 50_000
+
 
 if torch.cuda.is_available():
     print("Using CUDA device:", torch.cuda.get_device_name(0))
 else:
     print("CUDA is not available")
 
-ENV_NAME = 'SuperMarioBros-1-1-v0'
-SHOULD_TRAIN = True
-DISPLAY = True
-CKPT_SAVE_INTERVAL = 1000
-NUM_OF_EPISODES = 50_000
 
-env = gym_super_mario_bros.make(ENV_NAME, render_mode='human' if DISPLAY else 'rgb', apply_api_compatibility=True)
-env = JoypadSpace(env, RIGHT_ONLY)
+env = gym_super_mario_bros.make(
+    ENV_NAME, render_mode="human" if DISPLAY else "rgb", apply_api_compatibility=True
+)
+env = JoypadSpace(env, SIMPLE_MOVEMENT)
 
 env = apply_wrappers(env)
 
@@ -45,17 +58,35 @@ if not SHOULD_TRAIN:
 env.reset()
 next_state, reward, done, trunc, info = env.step(action=0)
 
-for i in range(NUM_OF_EPISODES):    
+start_episode = agent.training_iteration
+
+savepoint_path = os.path.join("models", "savepoints", SAVEPOINT_FILE)
+if SAVEPOINT_FILE != "" and os.path.exists(savepoint_path):
+    agent.load_savepoint(savepoint_path)
+    start_episode = agent.training_iteration
+
+for i in range(start_episode, NUM_OF_EPISODES):
     print("Episode:", i)
     done = False
     state, _ = env.reset()
     total_reward = 0
+    agent.training_iteration = i
+
+    if msvcrt.kbhit():
+        key = msvcrt.getch().decode("utf-8").lower()
+        if key == "q":
+            print("Quiting training loop")
+            new_save_point = os.path.join(save_path, get_current_date_time_string())
+            print(f"Savepoint created at: {new_save_point}")
+            agent.save_savepoint(new_save_point)
+            break
+
     while not done:
         a = agent.choose_action(state)
-        new_state, reward, done, truncated, info  = env.step(a)
+        new_state, reward, done, truncated, info = env.step(a)
         total_reward += reward
 
-        #if DISPLAY:
+        # if DISPLAY:
         #    time.sleep(1)
 
         if SHOULD_TRAIN:
@@ -64,7 +95,16 @@ for i in range(NUM_OF_EPISODES):
 
         state = new_state
 
-    print("Total reward:", total_reward, "Epsilon:", agent.epsilon, "Size of replay buffer:", len(agent.replay_buffer), "Learn step counter:", agent.learn_step_counter)
+    print(
+        "Total reward:",
+        total_reward,
+        "Epsilon:",
+        agent.epsilon,
+        "Size of replay buffer:",
+        len(agent.replay_buffer),
+        "Learn step counter:",
+        agent.learn_step_counter,
+    )
 
     if SHOULD_TRAIN and (i + 1) % CKPT_SAVE_INTERVAL == 0:
         agent.save_model(os.path.join(model_path, "model_" + str(i + 1) + "_iter.pt"))
